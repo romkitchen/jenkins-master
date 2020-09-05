@@ -20,9 +20,7 @@ job("lineage-16.0") {
 		}
 	}
 	properties {
-		copyArtifactPermissionProperty {
-			projectNames('lineage-16.0-deploy')
-		}
+		copyArtifactPermission("lineage-16.0-deploy")
 	}
 	publishers {
 		archiveArtifacts {
