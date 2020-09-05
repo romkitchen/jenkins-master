@@ -1,8 +1,5 @@
 job("lineage-16.0") {
 	concurrentBuild()
-	configure { project ->
-		(project / "authToken").setValue("A6EWtQMoCayRy3e76j0j")
-	}
 	description("Builds LineageOS 16.0 for a specific device with optional patches.")
 	displayName("LineageOS 16.0 (nightly)")
 	label("lineage-16.0")
