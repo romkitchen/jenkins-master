@@ -1,4 +1,9 @@
 job("lineage-16.0") {
+	configure { project ->
+		project / "properties" / "hudson.plugins.copyartifact.CopyArtifactPermissionProperty" / "projectNameList" {
+			"string" "lineage-16.0-deploy"
+		}
+	}
 	concurrentBuild()
 	description("Builds LineageOS 16.0 for a specific device with optional patches.")
 	displayName("LineageOS 16.0 (nightly)")
@@ -18,9 +23,6 @@ job("lineage-16.0") {
 			description("An ISO 639 alpha-2 or alpha-3 language code which is used to localize the job finished email.")
 			trim(true)
 		}
-	}
-	properties {
-		copyArtifactPermissionProperty("lineage-16.0-deploy")
 	}
 	publishers {
 		archiveArtifacts {
