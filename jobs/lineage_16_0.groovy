@@ -8,6 +8,7 @@ job("lineage-16.0") {
 		booleanParam("HID_DEV_MTU_SIZE_512_PATCH", false, "Applies a patch which sets HID_DEV_MTU_SIZE to 512 for Nintendo Amiibo support.")
 		stringParam {
 			name("USER_EMAIL_ADDRESS")
+			defaultValue("")
 			description("Email address to send an email to when job is finished.")
 			trim(true)
 		}
