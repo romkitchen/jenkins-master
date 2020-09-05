@@ -9,13 +9,13 @@ job("lineage-16.0") {
 		stringParam {
 			name("USER_EMAIL_ADDRESS")
 			description("Email address to send an email to when job is finished.")
-			trim()
+			trim(true)
 		}
 		stringParam {
 			name("USER_LANGUAGE")
 			defaultValue("en")
 			description("An ISO 639 alpha-2 or alpha-3 language code which is used to localize the job finished email.")
-			trim()
+			trim(true)
 		}
 	}
 	properties {
