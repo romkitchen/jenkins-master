@@ -1,0 +1,13 @@
+version: "3.7"
+
+services:
+  jenkins:
+    build: .
+    ports:
+      - "8585:8080"
+      - "50505:50000"
+    volumes:
+      - romkitchen_master:/var/jenkins_home
+
+volumes:
+  romkitchen_master:
