@@ -1,3 +1,4 @@
 FROM jenkins/jenkins:lts
-RUN jenkins-plugin-cli --plugins \
+RUN /usr/local/bin/install-plugins.sh \
+	git \
 	workflow-aggregator

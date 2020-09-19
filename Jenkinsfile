@@ -12,22 +12,24 @@ pipeline {
 	agent { label 'master' }
 	parameters {
 		string name: 'CONFIG_ID', defaultValue: '', description: 'Unique configuration identifier.'
-		choice name: 'CONFIG', choices: configs, description: 'Configuration containing vendor, device and OS. Each separated by a colon.'
+		choice name: 'CONFIG', choices: loadConfigs(), description: 'Configuration containing vendor, device and OS. Each separated by a colon.'
 	}
 	stages {
 		stage('Prepare') {
 			steps {
-				echo 'Preparing...'
+				script {
+					echo 'Preparing...'
 
-				if (params.CONFIG_ID == null) {
-					error 'Missing parameter CONFIG_ID.'
+					if (params.CONFIG_ID == null) {
+						error 'Missing parameter CONFIG_ID.'
+					}
+
+					vendor = params.CONFIG.substring(0, params.CONFIG.indexOf(':'))
+					device = params.CONFIG.substring(params.CONFIG.indexOf(':') + 1, params.CONFIG.lastIndexOf(':'))
+					os = params.CONFIG.substring(params.CONFIG.lastIndexOf(':') + 1)
 				}
 
-				vendor = params.CONFIG.substring(0, params.CONFIG.indexOf(':'))
-				device = params.CONFIG.substring(params.CONFIG.indexOf(':') + 1, params.CONFIG.lastIndexOf(':'))
-				os = params.CONFIG.substring(params.CONFIG.lastIndexOf(':') + 1)
-
-				stash includes: "${env.CONFIG_DIR}/${params.CONFIG_ID}/**/*", name: 'config'
+				stash allowEmpty: true, includes: "${env.JENKINS_HOME}/configs/${params.CONFIG_ID}/**/*", name: 'config'
 			}
 		}
 		stage('Build') {
@@ -58,21 +60,23 @@ pipeline {
 				// STEP 3: Extracting proprietary blobs
 
 				// STEP 3.1: Download and extract installable zip
-				installableURL = getCommunityInstallableURL(device, os)
-				if (installableURL == null) {
-					installableURL = sh script: """
-					wget --spider -Fr -np "https://lineageos.mirrorhub.io/full/${device}/" 2>&1 \
-						| grep '^--' | awk '{ print $3 }' | grep "${os}.*\.zip$" | sort -nr | head -n 1
-					""", returnStdout: true
+				script {
+					installableURL = getCommunityInstallableURL(device, os)
+					if (installableURL == null) {
+						installableURL = sh script: """
+						wget --spider -Fr -np "https://lineageos.mirrorhub.io/full/${device}/" 2>&1 \
+							| grep '^--' | awk '{ print \$3 }' | grep "$os.*\\.zip\$" | sort -nr | head -n 1
+						""", returnStdout: true
+					}
 				}
 				sh "curl ${installableURL} --output installable.zip && unzip installable.zip -d installable"
 
 				// STEP 3.2: Finally extract
 				sh """
 				for i in "installable/*.new.dat.br"; do
-					partition=$(basename ${i} .new.dat.br)
+					partition=\$(basename \$i .new.dat.br)
 					if [ -f "installable/${partition}.transfer.list" ]; then
-						brotli --decompress --output="${partition}.new.dat" "${i}"
+						brotli --decompress --output="${partition}.new.dat" "\$i"
 						sdat2img "installable/${partition}.transfer.list" "${partition}.new.dat" "${partition}.img"
 					fi
 				done
@@ -86,7 +90,7 @@ pipeline {
 				fi
 
 				images=( vendor product oem odm )
-				for i in "${images[@]}"; do
+				for i in "\${images[@]}"; do
 					if [ -f "${i}.img" ]; then
 						7z x "${i}.img" -o"system_dump/${i}"
 					fi
@@ -133,7 +137,7 @@ pipeline {
 			}
 			post {
 				always {
-					archiveArtifacts allowEmpty: false, artifacts: "src/out/target/product/${device}/*.zip", onlyIfSuccessful: true
+					archiveArtifacts allowEmptyArchive: false, artifacts: "src/out/target/product/${device}/*.zip", onlyIfSuccessful: true
 				}
 				cleanup {
 					echo 'Cleaning build...'

@@ -3,6 +3,7 @@ version: "3.7"
 services:
   jenkins:
     build: .
+    container_name: romkitchen_master
     ports:
       - "8585:8080"
       - "50505:50000"
@@ -11,3 +12,4 @@ services:
 
 volumes:
   romkitchen_master:
+    name: romkitchen_master
