@@ -153,7 +153,7 @@ pipeline {
 		stage('Finalize') {
 			steps {
 				echo 'Finalizing...'
-				copyArtifacts optional: false, projectName: "${JOB_NAME}", selector: specific("${BUILD_NUMBER}"), target: "${env.CONFIG_DIR}/${params.CONFIG_ID}/out"
+				copyArtifacts optional: false, projectName: "${JOB_NAME}", selector: specific("${BUILD_NUMBER}"), target: "${env.JENKINS_HOME}/configs/${params.CONFIG_ID}/out"
 			}
 		}
 	}
