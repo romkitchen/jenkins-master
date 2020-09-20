@@ -44,7 +44,6 @@ pipeline {
 				// STEP 1: Synchronizing repository from $AGENT_HOME into a subdirectory of the workspace
 				dir('src') {
 					sh """
-					make clean
 					rsync -ahvzP --delete "${AGENT_HOME}/" ./
 					"""
 				}
