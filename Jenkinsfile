@@ -1,6 +1,6 @@
 #!/bin/groovy
 
-def loadConfigs() {
+def getConfigurations() {
 	return ['samsung:klte:lineage-16.0']
 }
 
@@ -12,7 +12,7 @@ pipeline {
 	agent { label 'master' }
 	parameters {
 		string name: 'CONFIG_ID', defaultValue: '', description: 'Unique configuration identifier.'
-		choice name: 'CONFIG', choices: loadConfigs(), description: 'Configuration containing vendor, device and OS. Each separated by a colon.'
+		choice name: 'CONFIG', choices: getConfigurations(), description: 'Configuration containing vendor, device and OS. Each separated by a colon.'
 	}
 	stages {
 		stage('Prepare') {
@@ -41,7 +41,7 @@ pipeline {
 					unstash 'config'
 				}
 
-				// STEP 1: Copy repository from $AGENT_HOME into a subdirectory of the workspace
+				// STEP 1: Synchronizing repository from $AGENT_HOME into a subdirectory of the workspace
 				dir('src') {
 					sh """
 					make clean
@@ -143,7 +143,7 @@ pipeline {
 					echo 'Cleaning build...'
 					sh """
 					for i in "../config/patches/*"; do
-						patch -tR < "../config/patches/${i}"
+						patch -tR < "../config/patches/\$i"
 					done
 					"""
 					// TODO remove apps
