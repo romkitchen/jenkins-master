@@ -158,7 +158,7 @@ pipeline {
 				cleanup {
 					echo 'Cleaning workspace...'
 					dir("${params.CONFIG_ID}") {
-						//deleteDir() // TODO uncomment again after test
+						deleteDir()
 					}
 				}
 			}
