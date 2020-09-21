@@ -153,9 +153,7 @@ pipeline {
 			}
 			post {
 				always {
-					dir("${params.CONFIG_ID}/src/out/target/product/${device}") {
-						archiveArtifacts allowEmptyArchive: false, artifacts: "${os}*.zip", onlyIfSuccessful: true
-					}
+					archiveArtifacts allowEmptyArchive: false, artifacts: "${params.CONFIG_ID}/src/out/target/product/${device}/${os}*.zip", onlyIfSuccessful: true
 				}
 				cleanup {
 					echo 'Cleaning workspace...'
@@ -168,7 +166,7 @@ pipeline {
 		stage('Finalize') {
 			steps {
 				echo 'Finalizing...'
-				copyArtifacts optional: false, projectName: "${JOB_NAME}", selector: specific("${BUILD_NUMBER}"), target: "${JENKINS_HOME}/configs/${params.CONFIG_ID}/out"
+				copyArtifacts flatten: true, optional: false, projectName: "${JOB_NAME}", selector: specific("${BUILD_NUMBER}"), target: "${JENKINS_HOME}/configs/${params.CONFIG_ID}/out"
 			}
 		}
 	}
