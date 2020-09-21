@@ -64,10 +64,10 @@ pipeline {
 						script {
 							installableURL = getCommunityInstallableURL(device, os)
 							if (installableURL == null) {
-								installableURL = sh script: """
+								installableURL = sh(script: """
 								wget --spider -Fr -np "https://lineageos.mirrorhub.io/full/${device}/" 2>&1 \
 									| grep '^--' | awk '{ print \$3 }' | grep "${os}.*\\.zip\$" | sort -nr | head -n 1
-								""", returnStdout: true
+								""", returnStdout: true).trim()
 							}
 						}
 
@@ -153,7 +153,9 @@ pipeline {
 			}
 			post {
 				always {
-					archiveArtifacts allowEmptyArchive: false, artifacts: "${params.CONFIG_ID}/src/out/target/product/${device}/${os}*.zip", onlyIfSuccessful: true
+					dir("${params.CONFIG_ID}/src/out/target/product/${device}") {
+						archiveArtifacts allowEmptyArchive: false, artifacts: "${os}*.zip", onlyIfSuccessful: true
+					}
 				}
 				cleanup {
 					echo 'Cleaning workspace...'
