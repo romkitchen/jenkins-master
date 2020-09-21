@@ -29,7 +29,7 @@ pipeline {
 					os = params.CONFIG.substring(params.CONFIG.lastIndexOf(':') + 1)
 				}
 
-				stash allowEmpty: true, includes: "${env.JENKINS_HOME}/configs/${params.CONFIG_ID}/**/*", name: 'config'
+				stash allowEmpty: true, includes: "${JENKINS_HOME}/configs/${params.CONFIG_ID}/**/*", name: 'config'
 			}
 		}
 		stage('Build') {
@@ -153,7 +153,7 @@ pipeline {
 			}
 			post {
 				always {
-					archiveArtifacts allowEmptyArchive: false, artifacts: "src/out/target/product/${device}/*.zip", onlyIfSuccessful: true
+					archiveArtifacts allowEmptyArchive: false, artifacts: "${params.CONFIG_ID}/src/out/target/product/${device}/${os}*.zip", onlyIfSuccessful: true
 				}
 				cleanup {
 					echo 'Cleaning workspace...'
@@ -166,7 +166,7 @@ pipeline {
 		stage('Finalize') {
 			steps {
 				echo 'Finalizing...'
-				copyArtifacts optional: false, projectName: "${JOB_NAME}", selector: specific("${BUILD_NUMBER}"), target: "${env.JENKINS_HOME}/configs/${params.CONFIG_ID}/out"
+				copyArtifacts optional: false, projectName: "${JOB_NAME}", selector: specific("${BUILD_NUMBER}"), target: "${JENKINS_HOME}/configs/${params.CONFIG_ID}/out"
 			}
 		}
 	}
