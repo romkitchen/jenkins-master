@@ -1,7 +1,7 @@
 #!/bin/groovy
 
 def getConfigurations() {
-	return ['samsung:klte:lineage-16.0']
+	return ['samsung:klte:lineage:16.0']
 }
 
 def getCommunityInstallableURL(device, os) {
@@ -24,16 +24,18 @@ pipeline {
 						error 'Missing parameter CONFIG_ID.'
 					}
 
-					vendor = params.CONFIG.substring(0, params.CONFIG.indexOf(':'))
-					device = params.CONFIG.substring(params.CONFIG.indexOf(':') + 1, params.CONFIG.lastIndexOf(':'))
-					os = params.CONFIG.substring(params.CONFIG.lastIndexOf(':') + 1)
+					configSplit = params.CONFIG.split(':');
+					vendor = configSplit[0]
+					device = configSplit[1]
+					os = configSplit[2]
+					version = configSplit[3]
 				}
 
 				stash allowEmpty: true, includes: "${JENKINS_HOME}/configs/${params.CONFIG_ID}/**/*", name: 'config'
 			}
 		}
 		stage('Build') {
-			agent { label os }
+			agent { label "${os} && ${version}" }
 			steps {
 				echo "Building ${params.CONFIG}..."
 
@@ -66,7 +68,7 @@ pipeline {
 							if (installableURL == null) {
 								installableURL = sh(script: """
 								wget --spider -Fr -np "https://lineageos.mirrorhub.io/full/${device}/" 2>&1 \
-									| grep '^--' | awk '{ print \$3 }' | grep "${os}.*\\.zip\$" | sort -nr | head -n 1
+									| grep '^--' | awk '{ print \$3 }' | grep "${os}-${version}.*\\.zip\$" | sort -nr | head -n 1
 								""", returnStdout: true).trim()
 							}
 						}
@@ -153,7 +155,7 @@ pipeline {
 			}
 			post {
 				always {
-					archiveArtifacts allowEmptyArchive: false, artifacts: "${params.CONFIG_ID}/src/out/target/product/${device}/${os}*.zip, ${params.CONFIG_ID}/src/out/target/product/${device}/${os}*.zip.md5sum", onlyIfSuccessful: true
+					archiveArtifacts allowEmptyArchive: false, artifacts: "${params.CONFIG_ID}/src/out/target/product/${device}/${os}-${version}*.zip, ${params.CONFIG_ID}/src/out/target/product/${device}/${os}-${version}*.zip.md5sum", onlyIfSuccessful: true
 				}
 				cleanup {
 					echo 'Cleaning workspace...'
