@@ -153,7 +153,7 @@ pipeline {
 			}
 			post {
 				always {
-					archiveArtifacts allowEmptyArchive: false, artifacts: "${params.CONFIG_ID}/src/out/target/product/${device}/${os}*.zip", onlyIfSuccessful: true
+					archiveArtifacts allowEmptyArchive: false, artifacts: "${params.CONFIG_ID}/src/out/target/product/${device}/${os}*.zip, ${params.CONFIG_ID}/src/out/target/product/${device}/${os}*.zip.md5sum", onlyIfSuccessful: true
 				}
 				cleanup {
 					echo 'Cleaning workspace...'
