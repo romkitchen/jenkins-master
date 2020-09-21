@@ -166,7 +166,7 @@ pipeline {
 		stage('Finalize') {
 			steps {
 				echo 'Finalizing...'
-				copyArtifacts flatten: true, optional: false, projectName: "${JOB_NAME}", selector: specific("${BUILD_NUMBER}"), target: "${JENKINS_HOME}/configs/${params.CONFIG_ID}/out"
+				copyArtifacts fingerprintArtifacts: true, flatten: true, optional: false, projectName: "${JOB_NAME}", selector: specific("${BUILD_NUMBER}"), target: "${JENKINS_HOME}/configs/${params.CONFIG_ID}/out"
 			}
 		}
 	}
