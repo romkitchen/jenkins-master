@@ -8,8 +8,4 @@ services:
       - "8585:8080"
       - "50505:50000"
     volumes:
-      - romkitchen_master:/var/jenkins_home
-
-volumes:
-  romkitchen_master:
-    name: romkitchen_master
+      - /var/romkitchen_master:/var/jenkins_home
