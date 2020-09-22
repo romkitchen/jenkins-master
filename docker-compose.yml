@@ -2,7 +2,11 @@ version: "3.7"
 
 services:
   jenkins:
-    build: .
+    build:
+      args:
+        gid: 1000
+        group: romkitchen
+      context: .
     container_name: romkitchen_master
     ports:
       - "8585:8080"
