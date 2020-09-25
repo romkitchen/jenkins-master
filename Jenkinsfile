@@ -1,8 +1,26 @@
 #!/bin/groovy
+import hudson.model.labels.LabelAtom;
+import jenkins.model.Jenkins;
 
-def getConfigurations() {
-	return ['samsung:klte:lineage:16.0']
+def loadConfigurations() {
+	def configurations = [];
+
+	def jenkins = Jenkins.instance;
+	def onlineComputers = jenkins.computers.findAll { it.online };
+	def availableLabels = onlineComputers.collect {
+			it.assignedLabels.collect { LabelAtom.escape(it.expression) } }
+		.flatten().unique(false);
+
+	def lineage16Configurations = ['samsung:klte:lineage:16.0'];
+
+	if (availableLabels.containsAll(['lineage', '16.0'])) {
+		configurations.addAll(lineage16Configurations);
+	}
+
+	return configurations;
 }
+
+def configurations = loadConfigurations();
 
 def getCommunityInstallableURL(device, os) {
 	return null;
@@ -12,7 +30,7 @@ pipeline {
 	agent { label 'master' }
 	parameters {
 		string name: 'CONFIG_ID', defaultValue: '', description: 'Unique configuration identifier.'
-		choice name: 'CONFIG', choices: getConfigurations(), description: 'Configuration containing vendor, device and OS. Each separated by a colon.'
+		choice name: 'CONFIG', choices: configurations, description: 'Configuration containing vendor, device and OS. Each separated by a colon.'
 	}
 	stages {
 		stage('Prepare') {
@@ -22,6 +40,10 @@ pipeline {
 
 					if (params.CONFIG_ID == null) {
 						error 'Missing parameter CONFIG_ID.'
+					}
+
+					if (!configurations.contains(params.CONFIG)) {
+						error 'Configuration not available'
 					}
 
 					configSplit = params.CONFIG.split(':');
