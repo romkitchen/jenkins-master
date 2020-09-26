@@ -4,51 +4,52 @@ static def getCommunityInstallableURL(device, os) {
 
 pipeline {
 	agent { label 'master' }
-	options([
-		parameters([
-			[
-				$class: 'ExtensibleChoiceParameterDefinition',
-				choiceListProvider: [
-					$class: 'SystemGroovyChoiceListProvider',
-					groovyScript: [
-						classpath: [],
-						sandbox: false,
-						script: '''
-							import hudson.model.labels.LabelAtom
-							import jenkins.model.Jenkins
-
-							def configurations = []
-
-							def jenkins = Jenkins.get()
-							def onlineComputers = jenkins.computers.findAll { it.online }
-							def availableLabels = onlineComputers.collect {
-									it.assignedLabels.collect { LabelAtom.escape(it.expression) } }
-								.flatten().unique(false)
-
-							def lineage16Configurations = new File('${WORKSPACE}/configurations/lineage-16.0.txt').text.split('[\\r\\n]+')
-
-							if (availableLabels.containsAll(['lineage', 'lineage-16.0'])) {
-								configurations.addAll(lineage16Configurations)
-							}
-
-							return configurations
-						'''
-					],
-					usePredefinedVariables: false
-				],
-				description: '',
-				editable: false,
-				name: 'CONFIG'
-			]
-		])
-	])
 	parameters {
 		string name: 'CONFIG_ID', defaultValue: '', description: 'Unique configuration identifier.'
 	}
 	stages {
 		stage('Prepare') {
 			steps {
-				script {
+				script {					
+					properties([
+						parameters([
+							[
+								$class: 'ExtensibleChoiceParameterDefinition',
+								choiceListProvider: [
+									$class: 'SystemGroovyChoiceListProvider',
+									groovyScript: [
+										classpath: [],
+										sandbox: false,
+										script: '''
+											import hudson.model.labels.LabelAtom
+											import jenkins.model.Jenkins
+
+											def configurations = []
+
+											def jenkins = Jenkins.get()
+											def onlineComputers = jenkins.computers.findAll { it.online }
+											def availableLabels = onlineComputers.collect {
+													it.assignedLabels.collect { LabelAtom.escape(it.expression) } }
+												.flatten().unique(false)
+
+											def lineage16Configurations = new File('${WORKSPACE}/configurations/lineage-16.0.txt').text.split('[\\r\\n]+')
+
+											if (availableLabels.containsAll(['lineage', 'lineage-16.0'])) {
+												configurations.addAll(lineage16Configurations)
+											}
+
+											return configurations
+										'''
+									],
+									usePredefinedVariables: false
+								],
+								description: '',
+								editable: false,
+								name: 'CONFIG'
+							]
+						])
+					])
+
 					echo 'Preparing...'
 
 					if (params.CONFIG_ID == null) {
