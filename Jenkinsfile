@@ -1,36 +1,42 @@
-#!/bin/groovy
-import hudson.model.labels.LabelAtom;
-import jenkins.model.Jenkins;
-
-def loadConfigurations() {
-	def configurations = [];
-
-	def jenkins = Jenkins.instance;
-	def onlineComputers = jenkins.computers.findAll { it.online };
-	def availableLabels = onlineComputers.collect {
-			it.assignedLabels.collect { LabelAtom.escape(it.expression) } }
-		.flatten().unique(false);
-
-	def lineage16Configurations = ['samsung:klte:lineage:16.0'];
-
-	if (availableLabels.containsAll(['lineage', '16.0'])) {
-		configurations.addAll(lineage16Configurations);
-	}
-
-	return configurations;
-}
-
-def configurations = loadConfigurations();
-
-def getCommunityInstallableURL(device, os) {
-	return null;
+static def getCommunityInstallableURL(device, os) {
+	return null
 }
 
 pipeline {
 	agent { label 'master' }
 	parameters {
 		string name: 'CONFIG_ID', defaultValue: '', description: 'Unique configuration identifier.'
-		choice name: 'CONFIG', choices: configurations, description: 'Configuration containing vendor, device and OS. Each separated by a colon.'
+		[
+			$class: 'SystemGroovyChoiceListProvider',
+			name: 'CONFIG',
+			description: 'Configuration containing vendor, device, OS and version. Each separated by a colon.',
+			usePredefinedVariables: false,
+			groovyScript: [
+				$class: 'SecureGroovyScript',
+				classpath: [],
+				sandbox: false,
+				script: '''
+					import hudson.model.labels.LabelAtom
+					import jenkins.model.Jenkins
+
+					def configurations = []
+
+					def jenkins = Jenkins.get()
+					def onlineComputers = jenkins.computers.findAll { it.online }
+					def availableLabels = onlineComputers.collect {
+							it.assignedLabels.collect { LabelAtom.escape(it.expression) } }
+						.flatten().unique(false)
+
+					def lineage16Configurations = new File('${WORKSPACE}/configurations/lineage-16.0.txt').text.split('[\\r\\n]+')
+
+					if (availableLabels.containsAll(['lineage', 'lineage-16.0'])) {
+						configurations.addAll(lineage16Configurations)
+					}
+
+					return configurations
+				'''
+			]
+		]
 	}
 	stages {
 		stage('Prepare') {
@@ -46,7 +52,7 @@ pipeline {
 						error 'Configuration not available'
 					}
 
-					configSplit = params.CONFIG.split(':');
+					configSplit = params.CONFIG.split(':')
 					vendor = configSplit[0]
 					device = configSplit[1]
 					os = configSplit[2]
