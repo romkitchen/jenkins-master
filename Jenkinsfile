@@ -4,15 +4,13 @@ static def getCommunityInstallableURL(device, os) {
 
 pipeline {
 	agent { label 'master' }
-	parameters {
-		string name: 'CONFIG_ID', defaultValue: '', description: 'Unique configuration identifier.'
-	}
 	stages {
 		stage('Prepare') {
 			steps {
 				script {					
 					properties([
 						parameters([
+							string(name: 'CONFIG_ID', defaultValue: '', description: 'Unique configuration identifier.'),
 							[
 								$class: 'ExtensibleChoiceParameterDefinition',
 								choiceListProvider: [
