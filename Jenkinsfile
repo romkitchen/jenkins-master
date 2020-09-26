@@ -4,7 +4,7 @@ static def getCommunityInstallableURL(device, os) {
 
 pipeline {
 	agent { label 'master' }
-	properties([
+	options([
 		parameters([
 			[
 				$class: 'ExtensibleChoiceParameterDefinition',
