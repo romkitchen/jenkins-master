@@ -32,7 +32,7 @@ pipeline {
 													it.assignedLabels.collect { LabelAtom.escape(it.expression) } }
 												.flatten().unique(false)
 
-											def lineage16Configurations = new File('${WORKSPACE}/configurations/lineage-16.0.txt').text.split('[\\r\\n]+')
+											def lineage16Configurations = ['samsung:klte:lineage:lineage-16.0']
 
 											if (availableLabels.containsAll(['lineage', 'lineage-16.0'])) {
 												configurations.addAll(lineage16Configurations)
