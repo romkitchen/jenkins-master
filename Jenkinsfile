@@ -54,10 +54,6 @@ pipeline {
 						error 'Missing parameter CONFIG_ID.'
 					}
 
-					if (!configurations.contains(params.CONFIG)) {
-						error 'Configuration not available'
-					}
-
 					configSplit = params.CONFIG.split(':')
 					vendor = configSplit[0]
 					device = configSplit[1]
