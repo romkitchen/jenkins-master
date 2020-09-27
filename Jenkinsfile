@@ -72,14 +72,25 @@ pipeline {
 						unstash 'config'
 					}
 
-					// STEP 1: Synchronizing repository from $AGENT_HOME into a subdirectory of the workspace
+					// STEP 1: Test patches
+					dir("${AGENT_HOME}") {
+						sh """
+						if [ -d "${WORKSPACE}/${params.CONFIG_ID}/config/patches" ]; then
+							for i in "${WORKSPACE}/${params.CONFIG_ID}/config/patches/*"; do
+								patch --dry-run -t < "\${i}"
+							done
+						fi
+						"""
+					}
+
+					// STEP 2: Synchronizing repository from $AGENT_HOME into a subdirectory of the workspace
 					dir('src') {
 						sh """
 						rsync -ahvzP --delete "${AGENT_HOME}/" ./
 						"""
 					}
 
-					// STEP 2: Prepare the device-specific code
+					// STEP 3: Prepare the device-specific code
 					dir('src') {
 						sh """#!/bin/bash
 						source build/envsetup.sh
@@ -87,9 +98,9 @@ pipeline {
 						"""
 					}
 
-					// STEP 3: Extracting proprietary blobs
+					// STEP 4: Extracting proprietary blobs
 
-					// STEP 3.1: Download and extract installable zip
+					// STEP 4.1: Download and extract installable zip
 					dir('installable') {
 						script {
 							installableURL = getCommunityInstallableURL(device, os)
@@ -108,7 +119,7 @@ pipeline {
 						"""
 					}
 
-					// STEP 3.2: Finally extract
+					// STEP 4.2: Finally extract
 					dir('installable') {
 						sh """#!/bin/bash
 						for i in "*.new.dat.br"; do
@@ -144,7 +155,7 @@ pipeline {
 						sh "./extract-files.sh ../../../../installable/system_dump"
 					}
 
-					// STEP 4: Prepare the device-specific code again
+					// STEP 5: Prepare the device-specific code again
 					dir('src') {
 						sh """#!/bin/bash
 						source build/envsetup.sh
@@ -152,7 +163,7 @@ pipeline {
 						"""
 					}
 
-					// STEP 5: Apply patches
+					// STEP 6: Apply patches
 					dir('src') {
 						sh """
 						if [ -d "../config/patches" ]; then
@@ -163,10 +174,10 @@ pipeline {
 						"""
 					}
 
-					// STEP 6: Add apps
+					// STEP 7: Add apps
 					// TODO
 
-					// STEP 7: Start the build
+					// STEP 8: Start the build
 					dir('src') {
 						sh """#!/bin/bash
 						export CCACHE_EXEC=/usr/bin/ccache
@@ -177,7 +188,7 @@ pipeline {
 						"""
 					}
 
-					// STEP 8: Sign build
+					// STEP 9: Sign build
 					// TODO
 				}
 			}
