@@ -10,7 +10,7 @@ pipeline {
 				script {					
 					properties([
 						parameters([
-							string(name: 'CONFIG_ID', defaultValue: '', description: 'Unique configuration identifier.'),
+							string(name: 'CONFIG_ID', defaultValue: '', description: 'Unique configuration identifier.', trim: true),
 							[
 								$class: 'ExtensibleChoiceParameterDefinition',
 								choiceListProvider: [
@@ -22,26 +22,24 @@ pipeline {
 											import hudson.model.labels.LabelAtom
 											import jenkins.model.Jenkins
 
-											def configurations = []
-
 											def jenkins = Jenkins.get()
-											def onlineComputers = jenkins.computers.findAll { it.online }
-											def availableLabels = onlineComputers.collect {
-													it.assignedLabels.collect { LabelAtom.escape(it.expression) } }
-												.flatten().unique(false)
+											def workspace = "${jenkins.rootDir}/workspace/${project.name}"
 
-											def lineage16Configurations = ['samsung:klte:lineage:lineage-16.0']
-
-											if (availableLabels.containsAll(['lineage', 'lineage-16.0'])) {
-												configurations.addAll(lineage16Configurations)
-											}
-
-											return configurations
+											return jenkins.computers
+												.findAll { it.online }
+												.collect { it.node.labelString }
+												.collect { it.split('\\s+') }
+												.flatten()
+												.findAll { !it.empty }
+												.collect { new File("${workspace}/configurations/${it}.txt") }
+												.findAll { it.exists() }
+												.collect { it.text.split('[\\r\\n]+') }
+												.flatten()
 										'''
 									],
-									usePredefinedVariables: false
+									usePredefinedVariables: true
 								],
-								description: '',
+								description: 'Configuration containing vendor, device, OS and version. Each separated by a colon.',
 								editable: false,
 								name: 'CONFIG'
 							]
