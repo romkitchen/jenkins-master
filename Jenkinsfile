@@ -139,7 +139,7 @@ EOF
 					def hasProprietaryBlobs = roomserviceXml.project.any { it.@path == "vendor/${vendor}" }
 
 					if (!hasProprietaryBlobs) {
-						roomserviceXml.project << { name: "TheMuppets/proprietary_vendor_${vendor}", path: "vendor/${vendor}", remote: 'github' }
+						roomserviceXml.project << { @name: "TheMuppets/proprietary_vendor_${vendor}", @path: "vendor/${vendor}", @remote: 'github' }
 						new XmlNodePrinter(new PrintWriter(new FileWriter(roomserviceXmlFile))).print(roomserviceXml)
 					}
 				}
