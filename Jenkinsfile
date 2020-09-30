@@ -1,13 +1,11 @@
-static def getCommunityInstallableURL(device, os) {
-	return null
-}
-
 pipeline {
 	agent { label 'master' }
 	stages {
 		stage('Prepare') {
 			steps {
-				script {					
+				echo 'Preparing...'
+
+				script {
 					properties([
 						parameters([
 							string(name: 'CONFIG_ID', defaultValue: '', description: 'Unique configuration identifier.', trim: true),
@@ -15,6 +13,7 @@ pipeline {
 								$class: 'ExtensibleChoiceParameterDefinition',
 								choiceListProvider: [
 									$class: 'SystemGroovyChoiceListProvider',
+									usePredefinedVariables: true,
 									groovyScript: [
 										classpath: [],
 										sandbox: false,
@@ -36,8 +35,7 @@ pipeline {
 												.collect { it.text.split('[\\r\\n]+') }
 												.flatten()
 										'''
-									],
-									usePredefinedVariables: true
+									]
 								],
 								description: 'Configuration containing vendor, device, OS and version. Each separated by a colon.',
 								editable: false,
@@ -46,9 +44,7 @@ pipeline {
 						])
 					])
 
-					echo 'Preparing...'
-
-					if (params.CONFIG_ID == null) {
+					if (!params.CONFIG_ID) {
 						error 'Missing parameter CONFIG_ID.'
 					}
 
@@ -59,161 +55,156 @@ pipeline {
 					version = configSplit[3]
 				}
 
-				stash allowEmpty: true, includes: "${JENKINS_HOME}/configs/${params.CONFIG_ID}/**/*", name: 'config'
+				stash allowEmpty: true, includes: "${JENKINS_HOME}/uploads/${params.CONFIG_ID}/**/*", name: 'config-uploads'
 			}
 		}
 		stage('Build') {
-			agent { label "${os} && ${version}" }
+			agent {
+				node {
+					label "${os} && ${version}"
+					customWorkspace "${AGENT_HOME}"
+				}
+			}
 			steps {
+				// check if sync job is queued
+				// and wait until it's finished
+				script {
+					def syncQueued = false
+
+					while ({
+						syncQueued = fileExists 'sync.queued'
+						syncQueued
+					}()) continue
+				}
+
 				echo "Building ${params.CONFIG}..."
 
-				dir("${params.CONFIG_ID}") {
-					dir('config') {
-						unstash 'config'
-					}
+				// create status file used for sync job
+				// to check for currently running builds
+				writeFile file: "${params.CONFIG_ID}.running", text: ''
 
-					// STEP 1: Test patches
-					dir("${AGENT_HOME}") {
-						sh """
-						if [ -d "${WORKSPACE}/${params.CONFIG_ID}/config/patches" ]; then
-							for i in "${WORKSPACE}/${params.CONFIG_ID}/config/patches/*"; do
-								patch --dry-run -t < "\${i}"
-							done
-						fi
-						"""
-					}
+				// create custom device
+				dir("device/romkitchen/${params.CONFIG_ID}") {
+					unstash 'config-uploads'
 
-					// STEP 2: Synchronizing repository from $AGENT_HOME into a subdirectory of the workspace
-					dir('src') {
-						sh """
-						rsync -ahvzP --delete "${AGENT_HOME}/" ./
-						"""
-					}
+					// create patches in overlay folder
+					// TODO...
 
-					// STEP 3: Prepare the device-specific code
-					dir('src') {
-						sh """#!/bin/bash
-						source build/envsetup.sh
-						breakfast ${device}
-						"""
-					}
+					writeFile file: 'AndroidProducts.mk', text: 'PRODUCT_MAKEFILES := $(LOCAL_DIR)/product.mk'
 
-					// STEP 4: Extracting proprietary blobs
+					// read original makefiles
+					sh """#!/bin/bash
+					inheritProductCalls=$(LOCAL_DIR="device/${vendor}/${device}" make -f - 2>/dev/null <<\EOF
+					include AndroidProducts.mk
+					all:
+						$(foreach MAKEFILE,$(PRODUCT_MAKEFILES),$$(call inherit-product, $(MAKEFILE)))
+EOF
+					)
+					"""
 
-					// STEP 4.1: Download and extract installable zip
-					dir('installable') {
-						script {
-							installableURL = getCommunityInstallableURL(device, os)
-							if (installableURL == null) {
-								installableURL = sh(script: """
-								wget --spider -Fr -np "https://lineageos.mirrorhub.io/full/${device}/" 2>&1 \
-									| grep '^--' | awk '{ print \$3 }' | grep "${os}-${version}.*\\.zip\$" | sort -nr | head -n 1
-								""", returnStdout: true).trim()
-							}
-						}
+					// write product makefile
+					writeFile file: 'product.mk', text: """
+					${inheritProductCalls}
 
-						sh """
-						installableZip=\$(basename ${installableURL})
-						curl --output \${installableZip} ${installableURL}
-						unzip \${installableZip} -d .
-						"""
-					}
+					include \$(CLEAR_VARS)
+					LOCAL_MODULE := system-apps
+					LOCAL_SRC_FILES := apps/system/*.apk
+					LOCAL_MODULE_CLASS := APPS
+					LOCAL_MODULE_TAGS := optional
+					LOCAL_UNINSTALLABLE_MODULE := true
+					LOCAL_CERTIFICATE := PRESIGNED
+					LOCAL_MULTILIB := both
+					include \$(BUILD_PREBUILT)
 
-					// STEP 4.2: Finally extract
-					dir('installable') {
-						sh """#!/bin/bash
-						for i in "*.new.dat.br"; do
-							partition=\$(basename \${i} .new.dat.br)
-							if [ -f "\${partition}.transfer.list" ]; then
-								brotli --decompress --output="\${partition}.new.dat" "\${partition}.new.dat.br"
-								sdat2img "\${partition}.transfer.list" "\${partition}.new.dat" "\${partition}.img"
-							fi
-						done
+					include \$(CLEAR_VARS)
+					LOCAL_MODULE := data-apps
+					LOCAL_SRC_FILES := apps/data/*.apk
+					LOCAL_MODULE_CLASS := APPS
+					LOCAL_MODULE_TAGS := optional
+					LOCAL_UNINSTALLABLE_MODULE := false
+					LOCAL_CERTIFICATE := PRESIGNED
+					LOCAL_MULTILIB := both
+					include \$(BUILD_PREBUILT)
 
-						if [ -f "payload.bin" ]; then
-							python "../src/scripts/update-payload-extractor/extract.py" "payload.bin" --output_dir .
-						fi
-
-						if [ -f "system.img" ]; then
-							7z x system.img -o"system_dump"
-						fi
-
-						images=( vendor product oem odm )
-						for i in "\${images[@]}"; do
-							if [ -f "\${i}.img" ]; then
-								7z x "\${i}.img" -o"system_dump/\${i}"
-							fi
-						done
-
-						if find -- "system_dump" -prune -type d -empty | grep -q .; then
-							cp "system/*" "system_dump"
-						fi
-						"""
-					}
-
-					dir("src/device/${vendor}/${device}") {
-						sh "./extract-files.sh ../../../../installable/system_dump"
-					}
-
-					// STEP 5: Prepare the device-specific code again
-					dir('src') {
-						sh """#!/bin/bash
-						source build/envsetup.sh
-						breakfast ${device}
-						"""
-					}
-
-					// STEP 6: Apply patches
-					dir('src') {
-						sh """
-						if [ -d "../config/patches" ]; then
-							for i in "../config/patches/*"; do
-								patch -t < "\${i}"
-							done
-						fi
-						"""
-					}
-
-					// STEP 7: Add apps
-					// TODO
-
-					// STEP 8: Start the build
-					dir('src') {
-						sh """#!/bin/bash
-						export CCACHE_EXEC=/usr/bin/ccache
-						export USE_CCACHE=1
-						\${CCACHE_EXEC} -M \${CCACHE_SIZE}
-						source build/envsetup.sh
-						brunch ${device}
-						"""
-					}
-
-					// STEP 9: Sign build
-					// TODO
+					DEVICE_PACKAGE_OVERLAYS += \$(LOCAL_PATH)/overlay
+					PRODUCT_NAME := ${os}_${device}_${params.CONFIG_ID}
+					PRODUCT_PACKAGES += system-apps data-apps
+					"""
 				}
+
+				// add missing proprietary blobs
+				script {
+					def roomserviceXmlFile = "${AGENT_HOME}/.repo/local_manifests/roomservice.xml"
+					def roomserviceXml = new XmlParser().parse(roomserviceXmlFile)
+					def hasProprietaryBlobs = roomserviceXml.project.any { it.@path == "vendor/${vendor}" }
+
+					if (!hasProprietaryBlobs) {
+						roomserviceXml.project << { name: "TheMuppets/proprietary_vendor_${vendor}", path: "vendor/${vendor}", remote: 'github' }
+						new XmlNodePrinter(new PrintWriter(new FileWriter(roomserviceXmlFile))).print(roomserviceXml)
+					}
+				}
+
+				// get missing proprietary blobs
+				sh """
+				if [ ! ${hasProprietaryBlobs} ]; then
+					repo sync "TheMuppets/proprietary_vendor_${vendor}"
+				fi
+				"""
+
+				// prepare the device-specific code
+				sh """#!/bin/bash
+				source build/envsetup.sh
+				breakfast ${device}
+				lunch ${os}_${device}_${params.CONFIG_ID}-userdebug
+				"""
+
+				// turn on caching to speed up build and start
+				sh """#!/bin/bash
+				export OUT_DIR="${AGENT_HOME}/out/${params.CONFIG_ID}"
+				export CCACHE_EXEC=/usr/bin/ccache
+				export USE_CCACHE=1
+				ccache -M \${CCACHE_SIZE}
+				source build/envsetup.sh
+				mka bacon
+				"""
+
+				// TODO: sign build
 			}
 			post {
 				always {
-					archiveArtifacts allowEmptyArchive: false, artifacts: "${params.CONFIG_ID}/src/out/target/product/${device}/${os}-${version}*.zip, ${params.CONFIG_ID}/src/out/target/product/${device}/${os}-${version}*.zip.md5sum", onlyIfSuccessful: true
+					archiveArtifacts allowEmptyArchive: false, artifacts: "out/${params.CONFIG_ID}/target/product/${device}/*${version}*.zip, out/${params.CONFIG_ID}/target/product/${device}/*${version}*.zip.md5sum", onlyIfSuccessful: true
 				}
 				cleanup {
 					echo 'Cleaning workspace...'
-					dir("${params.CONFIG_ID}") {
+
+					dir("device/romkitchen/${params.CONFIG_ID}") {
 						deleteDir()
 					}
+
+					dir ("out/${params.CONFIG_ID}") {
+						deleteDir()
+					}
+
+					// delete status file
+					sh "rm ${params.CONFIG_ID}.running"
 				}
 			}
 		}
 		stage('Finalize') {
 			steps {
 				echo 'Finalizing...'
-				copyArtifacts fingerprintArtifacts: true, flatten: true, optional: false, projectName: "${JOB_NAME}", selector: specific("${BUILD_NUMBER}"), target: "${JENKINS_HOME}/configs/${params.CONFIG_ID}/out"
+
+				copyArtifacts flatten: true, optional: false, projectName: "${JOB_NAME}", selector: specific("${BUILD_NUMBER}"), target: "${JENKINS_HOME}/out/${params.CONFIG_ID}"
 			}
 		}
 	}
 	post {
 		cleanup {
 			echo 'Final cleaning...'
+
+			dir("${JENKINS_HOME}/uploads/${params.CONFIG_ID}") {
+				deleteDir()
+			}
 		}
 	}
 }
