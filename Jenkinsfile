@@ -152,10 +152,11 @@ EOF
 				script {
 					def roomserviceXmlFile = "${AGENT_HOME}/.repo/local_manifests/roomservice.xml"
 					def roomserviceXml = new XmlParser().parse(roomserviceXmlFile)
-					def hasProprietaryBlobs = roomserviceXml.project.any { it.@path == "vendor/${vendor}" }
+					def hasProprietaryBlobs = roomserviceXml.project.any { it.'@path' == "vendor/${vendor}" }
 
 					if (!hasProprietaryBlobs) {
-						roomserviceXml.project << { @name: "TheMuppets/proprietary_vendor_${vendor}", @path: "vendor/${vendor}", @remote: 'github' }
+						def projectNode = new NodeBuilder().project(name: "TheMuppets/proprietary_vendor_${vendor}", path: "vendor/${vendor}", remote: 'github')
+						roomserviceXml.project.append(projectNode)
 						new XmlNodePrinter(new PrintWriter(new FileWriter(roomserviceXmlFile))).print(roomserviceXml)
 					}
 				}
