@@ -100,7 +100,7 @@ pipeline {
 							sh """#!/bin/bash
 							for i in "device/romkitchen/${params.CONFIG_ID}/patches/*.patch"; do
 								OUTFILE = \$(diffstat -p0 -l "\${i}")
-								patch -p0 -t -o "\${OUTFILE}" << "\${i}"
+								patch -p0 -t -o "overlay/\${OUTFILE}" << "\${i}"
 							done
 							"""
 						}
