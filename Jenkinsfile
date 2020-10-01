@@ -110,7 +110,7 @@ pipeline {
 
 					// read original makefiles
 					sh """#!/bin/bash
-					inheritProductCalls=\$(LOCAL_DIR="device/${vendor}/${device}" make -f - 2>/dev/null <<\EOF
+					inheritProductCalls=\$(LOCAL_DIR="device/${vendor}/${device}" make -f - 2>/dev/null <<\\EOF
 					include AndroidProducts.mk
 					all:
 						\$(foreach MAKEFILE,\$(PRODUCT_MAKEFILES),\$\$(call inherit-product, \$(MAKEFILE)))
