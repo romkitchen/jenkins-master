@@ -40,7 +40,8 @@ pipeline {
 								description: 'Configuration containing vendor, device, OS and version. Each separated by a colon.',
 								editable: false,
 								name: 'CONFIG'
-							]
+							],
+							booleanParam(name: 'DEBUG', defaultValue: false, description: 'Whether directories should be cleaned up or not.')
 						])
 					])
 
@@ -87,17 +88,32 @@ pipeline {
 				dir("device/romkitchen/${params.CONFIG_ID}") {
 					unstash 'config-uploads'
 
-					// create patches in overlay folder
-					// TODO...
+					// create patched files in overlay folder
+					dir('patches') {
+						dir('original') {
+							sh 'mv ../*.patch .'
+						}
+
+						sh 'splitpatch original/*.patch'
+
+						dir('../../../..') {
+							sh """#!/bin/bash
+							for i in "device/romkitchen/${params.CONFIG_ID}/patches/*.patch"; do
+								OUTFILE = \$(diffstat -p0 -l "\${i}")
+								patch -p0 -t -o "\${OUTFILE}" << "\${i}"
+							done
+							"""
+						}
+					}
 
 					writeFile file: 'AndroidProducts.mk', text: 'PRODUCT_MAKEFILES := $(LOCAL_DIR)/product.mk'
 
 					// read original makefiles
 					sh """#!/bin/bash
-					inheritProductCalls=$(LOCAL_DIR="device/${vendor}/${device}" make -f - 2>/dev/null <<\EOF
+					inheritProductCalls=\$(LOCAL_DIR="device/${vendor}/${device}" make -f - 2>/dev/null <<\EOF
 					include AndroidProducts.mk
 					all:
-						$(foreach MAKEFILE,$(PRODUCT_MAKEFILES),$$(call inherit-product, $(MAKEFILE)))
+						\$(foreach MAKEFILE,\$(PRODUCT_MAKEFILES),\$\$(call inherit-product, \$(MAKEFILE)))
 EOF
 					)
 					"""
@@ -168,7 +184,8 @@ EOF
 				mka bacon
 				"""
 
-				// TODO: sign build
+				// sign build
+				// TODO ...
 			}
 			post {
 				always {
@@ -177,12 +194,16 @@ EOF
 				cleanup {
 					echo 'Cleaning workspace...'
 
-					dir("device/romkitchen/${params.CONFIG_ID}") {
-						deleteDir()
-					}
+					script {
+						if (!params.DEBUG) {
+							dir("device/romkitchen/${params.CONFIG_ID}") {
+								deleteDir()
+							}
 
-					dir ("out/${params.CONFIG_ID}") {
-						deleteDir()
+							dir ("out/${params.CONFIG_ID}") {
+								deleteDir()
+							}
+						}
 					}
 
 					// delete status file
@@ -202,8 +223,12 @@ EOF
 		cleanup {
 			echo 'Final cleaning...'
 
-			dir("${JENKINS_HOME}/uploads/${params.CONFIG_ID}") {
-				deleteDir()
+			script {
+				if (!params.DEBUG) {
+					dir("${JENKINS_HOME}/uploads/${params.CONFIG_ID}") {
+						deleteDir()
+					}
+				}
 			}
 		}
 	}
