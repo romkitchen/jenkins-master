@@ -1,3 +1,16 @@
+@NonCPS
+def appendMuppetsRepository(String manifest, String vendor) {
+	def projects = new XmlSlurper().parseText(manifest)
+	hasProprietaryBlobs = projects.project.any { it.@path == "vendor/${vendor}" }
+
+	if (!hasProprietaryBlobs) {
+		projects.appendNode(new XmlSlurper().parseText("<project name=\"TheMuppets/proprietary_vendor_${vendor}\" path=\"vendor/${vendor}\" remove=\"github\"/>"))
+		return groovy.xml.XmlUtil.serialize(projects)
+	}
+
+	return null
+}
+
 pipeline {
 	agent { label 'master' }
 	stages {
@@ -27,12 +40,12 @@ pipeline {
 											return jenkins.computers
 												.findAll { it.online }
 												.collect { it.node.labelString }
-												.collect { it.split('\\s+') }
+												.collect { it.split('\\\\s+') }
 												.flatten()
 												.findAll { !it.empty }
 												.collect { new File("${workspace}/configurations/${it}.txt") }
 												.findAll { it.exists() }
-												.collect { it.text.split('[\\r\\n]+') }
+												.collect { it.text.split('[\\\\r\\\\n]+') }
 												.flatten()
 										'''
 									]
@@ -60,155 +73,159 @@ pipeline {
 			}
 		}
 		stage('Build') {
-			agent {
-				node {
-					label "${os} && ${version}"
-					customWorkspace "${AGENT_HOME}"
-				}
-			}
+			agent { label "${os} && ${version}" }
 			steps {
-				// check if sync job is queued
-				// and wait until it's finished
-				script {
-					def syncQueued = false
+				ws("${AGENT_WORKDIR}/workspace") {
+					// check if sync job is queued
+					// and wait until it's finished
+					script {
+						def syncQueued = false
 
-					while ({
-						syncQueued = fileExists 'sync.queued'
-						syncQueued
-					}()) continue
-				}
+						while ({
+							syncQueued = fileExists 'sync.queued'
+							syncQueued
+						}()) continue
+					}
 
-				echo "Building ${params.CONFIG}..."
+					echo "Building ${params.CONFIG}..."
 
-				// create status file used for sync job
-				// to check for currently running builds
-				writeFile file: "${params.CONFIG_ID}.running", text: ''
+					// create status file used for sync job
+					// to check for currently running builds
+					writeFile file: "${params.CONFIG_ID}.running", text: ''
 
-				// create custom device
-				dir("device/romkitchen/${params.CONFIG_ID}") {
-					unstash 'config-uploads'
+					// prepare custom device
+					dir("device/romkitchen/${params.CONFIG_ID}") {
+						unstash 'config-uploads'
 
-					// create patched files in overlay folder
-					dir('patches') {
-						dir('original') {
-							sh 'mv ../*.patch .'
-						}
+						// create patched files in overlay folder
+						dir('patches') {
+							script {
+								def hasPatches = new File("${WORKSPACE}/device/romkitchen/${params.CONFIG_ID}/patches").listFiles().any { it.file }
+								if (hasPatches) {
+									dir('original') {
+										sh 'mv ../*.patch .'
+									}
 
-						sh 'splitpatch original/*.patch'
+									sh 'splitpatch original/*.patch'
 
-						dir('../../../..') {
-							sh """#!/bin/bash
-							for i in "device/romkitchen/${params.CONFIG_ID}/patches/*.patch"; do
-								OUTFILE = \$(diffstat -p0 -l "\${i}")
-								patch -p0 -t -o "overlay/\${OUTFILE}" << "\${i}"
-							done
-							"""
+									dir('../../../..') {
+										sh """#!/bin/bash
+										for i in "device/romkitchen/${params.CONFIG_ID}/patches/*.patch"; do
+											OUTFILE = \$(diffstat -p0 -l "\${i}")
+											patch -p0 -t -o "overlay/\${OUTFILE}" << "\${i}"
+										done
+										"""
+									}
+								}
+							}
 						}
 					}
 
-					writeFile file: 'AndroidProducts.mk', text: 'PRODUCT_MAKEFILES := $(LOCAL_DIR)/product.mk'
+					// add missing proprietary blobs
+					script {
+						def manifest = readFile "${WORKSPACE}/.repo/local_manifests/romkitchen.xml"
+						def newManifest = appendMuppetsRepository(manifest, vendor)
+						hasProprietaryBlobs = newManifest == null
 
-					// read original makefiles
+						if (!hasProprietaryBlobs) {
+							writeFile file: "${WORKSPACE}/.repo/local_manifests/romkitchen.xml", text: newManifest
+						}
+					}
+
+					// get missing proprietary blobs
+					sh """
+					if [ "${hasProprietaryBlobs}" = false ]; then
+						repo sync "TheMuppets/proprietary_vendor_${vendor}"
+					fi
+					"""
+
+					// prepare the device-specific code
 					sh """#!/bin/bash
-					inheritProductCalls=\$(LOCAL_DIR="device/${vendor}/${device}" make -f - 2>/dev/null <<\\EOF
-					include AndroidProducts.mk
-					all:
-						\$(foreach MAKEFILE,\$(PRODUCT_MAKEFILES),\$\$(call inherit-product, \$(MAKEFILE)))
+					source build/envsetup.sh
+					breakfast ${device}
+					lunch ${os}_${device}_${params.CONFIG_ID}-userdebug
+					"""
+
+					// create custom device
+					dir("device/romkitchen/${params.CONFIG_ID}") {
+						writeFile file: 'AndroidProducts.mk', text: 'PRODUCT_MAKEFILES := $(LOCAL_DIR)/product.mk'
+
+						// read original makefiles
+						sh """#!/bin/bash
+						inheritProductCalls=\$(LOCAL_DIR="device/${vendor}/${device}" make -f - 2>/dev/null <<\\EOF
+include "${WORKSPACE}/device/${vendor}/${device}/AndroidProducts.mk"
+all:
+    \$(foreach MAKEFILE,\$(PRODUCT_MAKEFILES),\$\$(call inherit-product, \$(MAKEFILE)))
 EOF
-					)
-					"""
+						)
+						"""
 
-					// write product makefile
-					writeFile file: 'product.mk', text: """
-					${inheritProductCalls}
+						// write product makefile
+						writeFile file: 'product.mk', text: """
+						${inheritProductCalls}
 
-					include \$(CLEAR_VARS)
-					LOCAL_MODULE := system-apps
-					LOCAL_SRC_FILES := apps/system/*.apk
-					LOCAL_MODULE_CLASS := APPS
-					LOCAL_MODULE_TAGS := optional
-					LOCAL_UNINSTALLABLE_MODULE := true
-					LOCAL_CERTIFICATE := PRESIGNED
-					LOCAL_MULTILIB := both
-					include \$(BUILD_PREBUILT)
+						include \$(CLEAR_VARS)
+						LOCAL_MODULE := system-apps
+						LOCAL_SRC_FILES := apps/system/*.apk
+						LOCAL_MODULE_CLASS := APPS
+						LOCAL_MODULE_TAGS := optional
+						LOCAL_UNINSTALLABLE_MODULE := true
+						LOCAL_CERTIFICATE := PRESIGNED
+						LOCAL_MULTILIB := both
+						include \$(BUILD_PREBUILT)
 
-					include \$(CLEAR_VARS)
-					LOCAL_MODULE := data-apps
-					LOCAL_SRC_FILES := apps/data/*.apk
-					LOCAL_MODULE_CLASS := APPS
-					LOCAL_MODULE_TAGS := optional
-					LOCAL_UNINSTALLABLE_MODULE := false
-					LOCAL_CERTIFICATE := PRESIGNED
-					LOCAL_MULTILIB := both
-					include \$(BUILD_PREBUILT)
+						include \$(CLEAR_VARS)
+						LOCAL_MODULE := data-apps
+						LOCAL_SRC_FILES := apps/data/*.apk
+						LOCAL_MODULE_CLASS := APPS
+						LOCAL_MODULE_TAGS := optional
+						LOCAL_UNINSTALLABLE_MODULE := false
+						LOCAL_CERTIFICATE := PRESIGNED
+						LOCAL_MULTILIB := both
+						include \$(BUILD_PREBUILT)
 
-					DEVICE_PACKAGE_OVERLAYS += \$(LOCAL_PATH)/overlay
-					PRODUCT_NAME := ${os}_${device}_${params.CONFIG_ID}
-					PRODUCT_PACKAGES += system-apps data-apps
-					"""
-				}
-
-				// add missing proprietary blobs
-				script {
-					def roomserviceXmlFile = "${AGENT_HOME}/.repo/local_manifests/roomservice.xml"
-					def roomserviceXml = new XmlParser().parse(roomserviceXmlFile)
-					def hasProprietaryBlobs = roomserviceXml.project.any { it.'@path' == "vendor/${vendor}" }
-
-					if (!hasProprietaryBlobs) {
-						def projectNode = new NodeBuilder().project(name: "TheMuppets/proprietary_vendor_${vendor}", path: "vendor/${vendor}", remote: 'github')
-						roomserviceXml.project.append(projectNode)
-						new XmlNodePrinter(new PrintWriter(new FileWriter(roomserviceXmlFile))).print(roomserviceXml)
+						DEVICE_PACKAGE_OVERLAYS += \$(LOCAL_PATH)/overlay
+						PRODUCT_NAME := ${os}_${device}_${params.CONFIG_ID}
+						PRODUCT_PACKAGES += system-apps data-apps
+						"""
 					}
+
+					// turn on caching to speed up build and start
+					sh """#!/bin/bash
+					export OUT_DIR="${AGENT_HOME}/out/${params.CONFIG_ID}"
+					export CCACHE_EXEC=/usr/bin/ccache
+					export USE_CCACHE=1
+					ccache -M \${CCACHE_SIZE}
+					source build/envsetup.sh
+					mka bacon
+					"""
 				}
-
-				// get missing proprietary blobs
-				sh """
-				if [ ! ${hasProprietaryBlobs} ]; then
-					repo sync "TheMuppets/proprietary_vendor_${vendor}"
-				fi
-				"""
-
-				// prepare the device-specific code
-				sh """#!/bin/bash
-				source build/envsetup.sh
-				breakfast ${device}
-				lunch ${os}_${device}_${params.CONFIG_ID}-userdebug
-				"""
-
-				// turn on caching to speed up build and start
-				sh """#!/bin/bash
-				export OUT_DIR="${AGENT_HOME}/out/${params.CONFIG_ID}"
-				export CCACHE_EXEC=/usr/bin/ccache
-				export USE_CCACHE=1
-				ccache -M \${CCACHE_SIZE}
-				source build/envsetup.sh
-				mka bacon
-				"""
-
-				// sign build
-				// TODO ...
 			}
 			post {
 				always {
-					archiveArtifacts allowEmptyArchive: false, artifacts: "out/${params.CONFIG_ID}/target/product/${device}/*${version}*.zip, out/${params.CONFIG_ID}/target/product/${device}/*${version}*.zip.md5sum", onlyIfSuccessful: true
+					ws("${AGENT_WORKDIR}/workspace") {
+						archiveArtifacts allowEmptyArchive: false, artifacts: "out/${params.CONFIG_ID}/target/product/${device}/*${version}*.zip, out/${params.CONFIG_ID}/target/product/${device}/*${version}*.zip.md5sum", onlyIfSuccessful: true
+					}
 				}
 				cleanup {
-					echo 'Cleaning workspace...'
+					ws("${AGENT_WORKDIR}/workspace") {
+						echo 'Cleaning workspace...'
 
-					script {
-						if (!params.DEBUG) {
-							dir("device/romkitchen/${params.CONFIG_ID}") {
-								deleteDir()
-							}
+						script {
+							if (!params.DEBUG) {
+								dir("device/romkitchen/${params.CONFIG_ID}") {
+									deleteDir()
+								}
 
-							dir ("out/${params.CONFIG_ID}") {
-								deleteDir()
+								dir ("out/${params.CONFIG_ID}") {
+									deleteDir()
+								}
 							}
 						}
-					}
 
-					// delete status file
-					sh "rm ${params.CONFIG_ID}.running"
+						// delete status file
+						sh "rm ${params.CONFIG_ID}.running"
+					}
 				}
 			}
 		}
