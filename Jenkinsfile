@@ -143,22 +143,19 @@ pipeline {
 					sh """#!/bin/bash
 					source build/envsetup.sh
 					breakfast ${device}
-					lunch ${os}_${device}_${params.CONFIG_ID}-userdebug
 					"""
 
 					// create custom device
 					dir("device/romkitchen/${params.CONFIG_ID}") {
-						writeFile file: 'AndroidProducts.mk', text: 'PRODUCT_MAKEFILES := $(LOCAL_DIR)/product.mk'
-
 						// read original makefiles
-						sh """#!/bin/bash
-						inheritProductCalls=\$(LOCAL_DIR="device/${vendor}/${device}" make -f - 2>/dev/null <<\\EOF
-include "${WORKSPACE}/device/${vendor}/${device}/AndroidProducts.mk"
-all:
-    \$(foreach MAKEFILE,\$(PRODUCT_MAKEFILES),\$\$(call inherit-product, \$(MAKEFILE)))
-EOF
-						)
-						"""
+						script {
+							inheritProductCalls = sh(returnStdout: true, script: """#!/bin/bash
+								export LOCAL_DIR="device/${vendor}/${device}"
+								echo 'romkitchen:;@echo \$(PRODUCT_MAKEFILES)' | make -f - -f "${WORKSPACE}/\${LOCAL_DIR}/AndroidProducts.mk" --no-print-directory romkitchen
+							""").trim().split(' ').collect { "\$(call inherit-product, ${it})" }.join("\n")
+						}
+
+						writeFile file: 'AndroidProducts.mk', text: 'PRODUCT_MAKEFILES := $(LOCAL_DIR)/product.mk'
 
 						// write product makefile
 						writeFile file: 'product.mk', text: """
@@ -189,6 +186,11 @@ EOF
 						PRODUCT_PACKAGES += system-apps data-apps
 						"""
 					}
+
+					sh """#!/bin/bash
+					source build/envsetup.sh
+					lunch ${os}_${device}_${params.CONFIG_ID}-userdebug
+					"""
 
 					// turn on caching to speed up build and start
 					sh """#!/bin/bash
