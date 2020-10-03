@@ -97,6 +97,9 @@ pipeline {
 					dir("device/romkitchen/${params.CONFIG_ID}") {
 						unstash 'config-uploads'
 
+						// convert apkm and xapk files
+						// TODO
+
 						// create patched files in overlay folder
 						dir('patches') {
 							script {
@@ -155,17 +158,17 @@ pipeline {
 							""").trim().split(' ').collect { "\$(call inherit-product, ${it})" }.join("\n")
 						}
 
-						writeFile file: 'AndroidProducts.mk', text: 'PRODUCT_MAKEFILES := $(LOCAL_DIR)/product.mk'
+						writeFile file: 'AndroidProducts.mk', text: "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/${os}_${device}_${params.CONFIG_ID}.mk"
 
 						// write product makefile
-						writeFile file: 'product.mk', text: """${inheritProductCalls}
+						writeFile file: "${os}_${device}_${params.CONFIG_ID}.mk", text: """${inheritProductCalls}
 
 include \$(CLEAR_VARS)
 LOCAL_MODULE := system-apps
 LOCAL_SRC_FILES := apps/system/*.apk
 LOCAL_MODULE_CLASS := APPS
 LOCAL_MODULE_TAGS := optional
-LOCAL_UNINSTALLABLE_MODULE := true
+LOCAL_UNINSTALLABLE_MODULE := false
 LOCAL_CERTIFICATE := PRESIGNED
 LOCAL_MULTILIB := both
 include \$(BUILD_PREBUILT)
@@ -175,7 +178,7 @@ LOCAL_MODULE := data-apps
 LOCAL_SRC_FILES := apps/data/*.apk
 LOCAL_MODULE_CLASS := APPS
 LOCAL_MODULE_TAGS := optional
-LOCAL_UNINSTALLABLE_MODULE := false
+LOCAL_UNINSTALLABLE_MODULE := true
 LOCAL_CERTIFICATE := PRESIGNED
 LOCAL_MULTILIB := both
 include \$(BUILD_PREBUILT)
@@ -186,13 +189,13 @@ PRODUCT_PACKAGES += system-apps data-apps"""
 					}
 
 					sh """#!/bin/bash
+					export OUT_DIR="${WORKSPACE}/out/${params.CONFIG_ID}"
 					source build/envsetup.sh
 					lunch ${os}_${device}_${params.CONFIG_ID}-userdebug
 					"""
 
 					// turn on caching to speed up build and start
 					sh """#!/bin/bash
-					export OUT_DIR="${AGENT_HOME}/out/${params.CONFIG_ID}"
 					export CCACHE_EXEC=/usr/bin/ccache
 					export USE_CCACHE=1
 					ccache -M \${CCACHE_SIZE}
