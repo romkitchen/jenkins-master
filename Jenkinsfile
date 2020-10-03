@@ -97,14 +97,34 @@ pipeline {
 					dir("device/romkitchen/${params.CONFIG_ID}") {
 						unstash 'config-uploads'
 
-						// convert apkm and xapk files
-						// TODO
+						// convert apkm and xapk files - https://github.com/souramoo/unapkm - xapk: unzip + mv obb file to <storage>/Android/obb
+						// and set variables for later use
+						dir('apps') {
+							dir('data') {
+								// TODO convert and remove any apkm or xapk files
+								script {
+									addDataApps = ''
+									if (sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \'*.apk\' -printf \'.\' | wc -c'", returnStdout: true).trim() != '0') {
+										addDataApps = "\nPRODUCT_PACKAGES += data-apps"
+									}
+								}
+							}
+
+							dir('system') {
+								// TODO convert and remove any apkm or xapk files
+								script {
+									addSystemApps = ''
+									if (sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \'*.apk\' -printf \'.\' | wc -c'", returnStdout: true).trim() != '0') {
+										addSystemApps = "\nPRODUCT_PACKAGES += system-apps"
+									}
+								}
+							}
+						}
 
 						// create patched files in overlay folder
 						dir('patches') {
 							script {
-								def hasPatches = new File("${WORKSPACE}/device/romkitchen/${params.CONFIG_ID}/patches").listFiles().any { it.file }
-								if (hasPatches) {
+								if (sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \'*.patch\' -printf \'.\' | wc -c'", returnStdout: true).trim() != '0') {
 									dir('original') {
 										sh 'mv ../*.patch .'
 									}
@@ -190,8 +210,7 @@ include \$(BUILD_PREBUILT)
 						writeFile file: "${os}_${device}_${params.CONFIG_ID}.mk", text: """${inheritProductCalls}
 
 DEVICE_PACKAGE_OVERLAYS += \$(LOCAL_PATH)/overlay
-PRODUCT_NAME := ${os}_${device}_${params.CONFIG_ID}
-PRODUCT_PACKAGES += system-apps data-apps
+PRODUCT_NAME := ${os}_${device}_${params.CONFIG_ID}${addDataApps}${addSystemApps}
 """
 					}
 
