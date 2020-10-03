@@ -158,34 +158,41 @@ pipeline {
 							""").trim().split(' ').collect { "\$(call inherit-product, ${it})" }.join("\n")
 						}
 
-						writeFile file: 'AndroidProducts.mk', text: "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/${os}_${device}_${params.CONFIG_ID}.mk"
+						// write android products makefile
+						writeFile file: 'AndroidProducts.mk', text: """PRODUCT_MAKEFILES := \$(LOCAL_DIR)/${os}_${device}_${params.CONFIG_ID}.mk
+"""
 
-						// write product makefile
-						writeFile file: "${os}_${device}_${params.CONFIG_ID}.mk", text: """${inheritProductCalls}
+						// write android makefile
+						writeFile file: 'Android.mk', text: """LOCAL_PATH := \$(call my-dir)
 
 include \$(CLEAR_VARS)
 LOCAL_MODULE := system-apps
-LOCAL_SRC_FILES := apps/system/*.apk
-LOCAL_MODULE_CLASS := APPS
 LOCAL_MODULE_TAGS := optional
-LOCAL_UNINSTALLABLE_MODULE := false
+LOCAL_SRC_FILES := apps/system/*.apk
 LOCAL_CERTIFICATE := PRESIGNED
-LOCAL_MULTILIB := both
+LOCAL_MODULE_CLASS := APPS
+LOCAL_PRIVILEGED_MODULE := true
+LOCAL_MODULE_SUFFIX := \$(COMMON_ANDROID_PACKAGE_SUFFIX)
 include \$(BUILD_PREBUILT)
 
 include \$(CLEAR_VARS)
 LOCAL_MODULE := data-apps
-LOCAL_SRC_FILES := apps/data/*.apk
-LOCAL_MODULE_CLASS := APPS
 LOCAL_MODULE_TAGS := optional
-LOCAL_UNINSTALLABLE_MODULE := true
+LOCAL_SRC_FILES := apps/data/*.apk
 LOCAL_CERTIFICATE := PRESIGNED
-LOCAL_MULTILIB := both
+LOCAL_MODULE_CLASS := APPS
+LOCAL_PRIVILEGED_MODULE := false
+LOCAL_MODULE_SUFFIX := \$(COMMON_ANDROID_PACKAGE_SUFFIX)
 include \$(BUILD_PREBUILT)
+"""
+
+						// write product makefile
+						writeFile file: "${os}_${device}_${params.CONFIG_ID}.mk", text: """${inheritProductCalls}
 
 DEVICE_PACKAGE_OVERLAYS += \$(LOCAL_PATH)/overlay
 PRODUCT_NAME := ${os}_${device}_${params.CONFIG_ID}
-PRODUCT_PACKAGES += system-apps data-apps"""
+PRODUCT_PACKAGES += system-apps data-apps
+"""
 					}
 
 					sh """#!/bin/bash
