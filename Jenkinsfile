@@ -138,7 +138,7 @@ pipeline {
 					// get missing proprietary blobs
 					sh """
 					if [ "${hasProprietaryBlobs}" = false ]; then
-						repo sync "TheMuppets/proprietary_vendor_${vendor}"
+						repo sync "vendor/${vendor}"
 					fi
 					"""
 
@@ -195,17 +195,17 @@ PRODUCT_PACKAGES += system-apps data-apps
 """
 					}
 
+					// add custom device, turn on caching to speed up build and start
 					sh """#!/bin/bash
 					export OUT_DIR="${WORKSPACE}/out/${params.CONFIG_ID}"
-					source build/envsetup.sh
-					lunch ${os}_${device}_${params.CONFIG_ID}-userdebug
-					"""
-
-					// turn on caching to speed up build and start
-					sh """#!/bin/bash
 					export CCACHE_EXEC=/usr/bin/ccache
 					export USE_CCACHE=1
+
+					source build/envsetup.sh
+					lunch ${os}_${device}_${params.CONFIG_ID}-userdebug
+
 					ccache -M \${CCACHE_SIZE}
+
 					source build/envsetup.sh
 					mka bacon
 					"""
