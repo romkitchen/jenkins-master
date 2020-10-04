@@ -69,7 +69,9 @@ pipeline {
 					version = configSplit[3]
 				}
 
-				stash allowEmpty: true, includes: "${JENKINS_HOME}/uploads/${params.CONFIG_ID}/**/*", name: 'config-uploads'
+				dir("${JENKINS_HOME}/uploads/${params.CONFIG_ID}") {
+					stash allowEmpty: true, name: 'config-uploads'
+				}
 			}
 		}
 		stage('Build') {
@@ -105,7 +107,7 @@ pipeline {
 									// TODO convert and remove any apkm or xapk files
 									script {
 										addDataApps = ''
-										if (sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \'*.apk\' -printf \'.\' | wc -c'", returnStdout: true).trim() != '0') {
+										if (sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \"*.apk\" -printf \".\" | wc -c'", returnStdout: true).trim() != '0') {
 											addDataApps = "\nPRODUCT_PACKAGES += data-apps"
 										}
 									}
@@ -115,7 +117,7 @@ pipeline {
 									// TODO convert and remove any apkm or xapk files
 									script {
 										addSystemApps = ''
-										if (sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \'*.apk\' -printf \'.\' | wc -c'", returnStdout: true).trim() != '0') {
+										if (sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \"*.apk\" -printf \".\" | wc -c'", returnStdout: true).trim() != '0') {
 											addSystemApps = "\nPRODUCT_PACKAGES += system-apps"
 										}
 									}
@@ -125,7 +127,7 @@ pipeline {
 							// create patched files in overlay folder
 							dir('patches') {
 								script {
-									if (sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \'*.patch\' -printf \'.\' | wc -c'", returnStdout: true).trim() != '0') {
+									if (sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \"*.patch\" -printf \".\" | wc -c'", returnStdout: true).trim() != '0') {
 										dir('original') {
 											sh 'mv ../*.patch .'
 										}
@@ -134,9 +136,11 @@ pipeline {
 
 										dir('../../../..') {
 											sh """#!/bin/bash
-											for i in "device/romkitchen/${params.CONFIG_ID}/patches/*.patch"; do
-												OUTFILE = \$(diffstat -p0 -l "\${i}")
-												patch -p0 -t -o "overlay/\${OUTFILE}" << "\${i}"
+											for i in device/romkitchen/${params.CONFIG_ID}/patches/*.patch; do
+												outfile=\$(diffstat -p0 -l "\${i}")
+												outpath=\$(dirname "\${outfile}")
+												mkdir -p "device/romkitchen/${params.CONFIG_ID}/overlay/\${outpath}"
+												patch -p0 -t -o "device/romkitchen/${params.CONFIG_ID}/overlay/\${outfile}" -i "\${i}"
 											done
 											"""
 										}
