@@ -77,7 +77,7 @@ pipeline {
 		stage('Build') {
 			agent { label "${os} && ${version}" }
 			steps {
-				ws("${AGENT_WORKDIR}/workspace/out/${params.CONFIG_ID}") {
+				ws("${AGENT_WORKDIR}/romkitchen/out/${params.CONFIG_ID}") {
 					dir('../..') {
 						// check if sync job is queued
 						// and wait until it's finished
@@ -170,7 +170,6 @@ pipeline {
 						// prepare the device-specific code
 						sh """#!/bin/bash
 						export OUT_DIR="${WORKSPACE}"
-						pwd
 						source build/envsetup.sh
 						breakfast ${device}
 						"""
@@ -240,12 +239,12 @@ PRODUCT_NAME := ${os}_${device}_${params.CONFIG_ID}${addDataApps}${addSystemApps
 			}
 			post {
 				always {
-					ws("${AGENT_WORKDIR}/workspace/out/${params.CONFIG_ID}") {
+					ws("${AGENT_WORKDIR}/romkitchen/out/${params.CONFIG_ID}") {
 						archiveArtifacts allowEmptyArchive: false, artifacts: "target/product/${device}/*${version}*.zip, target/product/${device}/*${version}*.zip.md5sum", onlyIfSuccessful: true
 					}
 				}
 				cleanup {
-					ws("${AGENT_WORKDIR}/workspace/out/${params.CONFIG_ID}") {
+					ws("${AGENT_WORKDIR}/romkitchen/out/${params.CONFIG_ID}") {
 						echo 'Cleaning workspace...'
 
 						dir('../..') {
