@@ -169,6 +169,7 @@ pipeline {
 
 						// prepare the device-specific code
 						sh """#!/bin/bash
+						export OUT_DIR="${WORKSPACE}"
 						source build/envsetup.sh
 						breakfast ${device}
 						"""
