@@ -1,7 +1,7 @@
 @NonCPS
 def appendMuppetsRepository(String manifest, String vendor) {
 	def projects = new XmlSlurper().parseText(manifest)
-	hasProprietaryBlobs = projects.project.any { it.@path == "vendor/${vendor}" }
+	hasProprietaryBlobs = projects.project.any { it['@path'] == "vendor/${vendor}" }
 
 	if (!hasProprietaryBlobs) {
 		projects.appendNode(new XmlSlurper().parseText("<project name=\"TheMuppets/proprietary_vendor_${vendor}\" path=\"vendor/${vendor}\" remove=\"github\"/>"))
