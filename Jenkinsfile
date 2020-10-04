@@ -100,26 +100,60 @@ pipeline {
 						dir("device/romkitchen/${params.CONFIG_ID}") {
 							unstash 'config-uploads'
 
+							// create product packages map
+							script {
+								localModules = []
+								productPackages = []
+							}
+
 							// convert apkm and xapk files - https://github.com/souramoo/unapkm - xapk: unzip + mv obb file to <storage>/Android/obb
 							// and set variables for later use
 							dir('apps') {
 								dir('data') {
 									// TODO convert and remove any apkm or xapk files
 									script {
-										addDataApps = ''
-										if (sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \"*.apk\" -printf \".\" | wc -c'", returnStdout: true).trim() != '0') {
-											addDataApps = "\nPRODUCT_PACKAGES += data-apps"
-										}
+										sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \"*.apk\" -printf \"%f\n\"'", returnStdout: true)
+											.trim()
+											.split("\n")
+											.eachWithIndex { itDataApp, i ->
+												localModules << """
+include \$(CLEAR_VARS)
+LOCAL_MODULE := data_app_${i}
+LOCAL_MODULE_TAGS := optional
+LOCAL_SRC_FILES := apps/data/${itDataApp}
+LOCAL_CERTIFICATE := PRESIGNED
+LOCAL_MODULE_CLASS := APPS
+LOCAL_PRIVILEGED_MODULE := false
+LOCAL_MODULE_SUFFIX := \$(COMMON_ANDROID_PACKAGE_SUFFIX)
+include \$(BUILD_PREBUILT)
+"""
+
+												productPackages << "data_app_${i}"
+											}
 									}
 								}
 
 								dir('system') {
 									// TODO convert and remove any apkm or xapk files
 									script {
-										addSystemApps = ''
-										if (sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \"*.apk\" -printf \".\" | wc -c'", returnStdout: true).trim() != '0') {
-											addSystemApps = "\nPRODUCT_PACKAGES += system-apps"
-										}
+										sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \"*.apk\" -printf \"%f\n\"'", returnStdout: true)
+											.trim()
+											.split("\n")
+											.eachWithIndex { itSystemApp, i ->
+												localModules << """
+include \$(CLEAR_VARS)
+LOCAL_MODULE := system_app_${i}
+LOCAL_MODULE_TAGS := optional
+LOCAL_SRC_FILES := apps/system/${itSystemApp}
+LOCAL_CERTIFICATE := PRESIGNED
+LOCAL_MODULE_CLASS := APPS
+LOCAL_PRIVILEGED_MODULE := true
+LOCAL_MODULE_SUFFIX := \$(COMMON_ANDROID_PACKAGE_SUFFIX)
+include \$(BUILD_PREBUILT)
+"""
+
+												productPackages << "system_app_${i}"
+											}
 									}
 								}
 							}
@@ -189,35 +223,27 @@ pipeline {
 """
 
 							// write android makefile
-							writeFile file: 'Android.mk', text: """LOCAL_PATH := \$(call my-dir)
-
-include \$(CLEAR_VARS)
-LOCAL_MODULE := system-apps
-LOCAL_MODULE_TAGS := optional
-LOCAL_SRC_FILES := \$(wildcard apps/system/*.apk)
-LOCAL_CERTIFICATE := PRESIGNED
-LOCAL_MODULE_CLASS := APPS
-LOCAL_PRIVILEGED_MODULE := true
-LOCAL_MODULE_SUFFIX := \$(COMMON_ANDROID_PACKAGE_SUFFIX)
-include \$(BUILD_PREBUILT)
-
-include \$(CLEAR_VARS)
-LOCAL_MODULE := data-apps
-LOCAL_MODULE_TAGS := optional
-LOCAL_SRC_FILES := \$(wildcard apps/data/*.apk)
-LOCAL_CERTIFICATE := PRESIGNED
-LOCAL_MODULE_CLASS := APPS
-LOCAL_PRIVILEGED_MODULE := false
-LOCAL_MODULE_SUFFIX := \$(COMMON_ANDROID_PACKAGE_SUFFIX)
-include \$(BUILD_PREBUILT)
-"""
+							script {
+								if (localModules.size() > 0) {
+									writeFile(file: 'Android.mk', text: """LOCAL_PATH := \$(call my-dir)
+${localModules.join()}
+""")
+								}
+							}
 
 							// write product makefile
+							script {
+								addProductPackages = ''
+								if (productPackages.size() > 0) {
+									addProductPackages = productPackages.collect { "PRODUCT_PACKAGES += ${it}" }.join("\n")
+								}
+							}
+
 							writeFile file: "${os}_${device}_${params.CONFIG_ID}.mk", text: """${inheritProductCalls}
 
 DEVICE_PACKAGE_OVERLAYS += \$(LOCAL_PATH)/overlay
-PRODUCT_NAME := ${os}_${device}_${params.CONFIG_ID}${addDataApps}${addSystemApps}
-"""
+PRODUCT_NAME := ${os}_${device}_${params.CONFIG_ID}
+${addProductPackages}"""
 						}
 
 						// add custom device, turn on caching to speed up build and start
