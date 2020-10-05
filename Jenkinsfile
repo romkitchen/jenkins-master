@@ -102,6 +102,7 @@ pipeline {
 
 							// create product packages map
 							script {
+								hasOverlay = false
 								localModules = [:]
 							}
 
@@ -135,6 +136,8 @@ include \$(BUILD_PREBUILT)
 							dir('patches') {
 								script {
 									if (sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \"*.patch\" -printf \".\" | wc -c'", returnStdout: true).trim() != '0') {
+										hasOverlay = true
+
 										dir('original') {
 											sh 'mv ../*.patch .'
 										}
@@ -210,12 +213,15 @@ ${localModules.values().join()}
 								if (localModules.size() > 0) {
 									addProductPackages = localModules.collect { "PRODUCT_PACKAGES += ${it.key}" }.join("\n")
 								}
+								addDevicePackageOverlays = ''
+								if (hasOverlay) {
+									addDevicePackageOverlays = "DEVICE_PACKAGE_OVERLAYS += \$(LOCAL_PATH)/overlay\n"
+								}
 							}
 
 							writeFile file: "${os}_${device}_${params.CONFIG_ID}.mk", text: """${inheritProductCalls}
 
-DEVICE_PACKAGE_OVERLAYS += \$(LOCAL_PATH)/overlay
-PRODUCT_NAME := ${os}_${device}_${params.CONFIG_ID}
+${addDevicePackageOverlays}PRODUCT_NAME := ${os}_${device}_${params.CONFIG_ID}
 ${addProductPackages}"""
 						}
 
