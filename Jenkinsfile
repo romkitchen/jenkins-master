@@ -102,61 +102,31 @@ pipeline {
 
 							// create product packages map
 							script {
-								localModules = []
-								productPackages = []
+								localModules = [:]
 							}
 
 							// convert apkm and xapk files - https://github.com/souramoo/unapkm - xapk: unzip + mv obb file to <storage>/Android/obb
 							// and set variables for later use
 							dir('apps') {
-								dir('data') {
-									// TODO convert and remove any apkm or xapk files
-									script {
-										sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \"*.apk\" -printf \"%f\n\"'", returnStdout: true)
-											.trim()
-											.split("\n")
-											.eachWithIndex { itDataApp, i ->
-												localModules << """
+								// TODO convert and remove any apkm or xapk files
+								script {
+									sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \"*.apk\" -printf \"%f\n\"'", returnStdout: true)
+										.trim()
+										.split("\n")
+										.each {
+											def applicationLabel = sh(script: "/bin/bash -c 'aapt dump badging \"${it}\" | pcregrep -o1 \$\"application-label:\\x27(.+)\\x27\" | tr -d \'[:space:]\''", returnStdout: true).trim()
+											localModules[applicationLabel] = """
 include \$(CLEAR_VARS)
 LOCAL_CERTIFICATE := PRESIGNED
-LOCAL_MODULE := data_app_${i}
-LOCAL_MODULE_CLASS := APPS
-LOCAL_MODULE_SUFFIX := \$(COMMON_ANDROID_PACKAGE_SUFFIX)
-LOCAL_MODULE_TAGS := optional
-LOCAL_PRIVILEGED_MODULE := false
-LOCAL_SRC_FILES := apps/data/${itDataApp}
-LOCAL_UNINSTALLABLE_MODULE := true
-include \$(BUILD_PREBUILT)
-"""
-
-												productPackages << "data_app_${i}"
-											}
-									}
-								}
-
-								dir('system') {
-									// TODO convert and remove any apkm or xapk files
-									script {
-										sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \"*.apk\" -printf \"%f\n\"'", returnStdout: true)
-											.trim()
-											.split("\n")
-											.eachWithIndex { itSystemApp, i ->
-												localModules << """
-include \$(CLEAR_VARS)
-LOCAL_CERTIFICATE := PRESIGNED
-LOCAL_MODULE := system_app_${i}
+LOCAL_MODULE := ${applicationLabel}
 LOCAL_MODULE_CLASS := APPS
 LOCAL_MODULE_SUFFIX := \$(COMMON_ANDROID_PACKAGE_SUFFIX)
 LOCAL_MODULE_TAGS := optional
 LOCAL_PRIVILEGED_MODULE := true
-LOCAL_SRC_FILES := apps/system/${itSystemApp}
-LOCAL_UNINSTALLABLE_MODULE := false
+LOCAL_SRC_FILES := apps/${it}
 include \$(BUILD_PREBUILT)
 """
-
-												productPackages << "system_app_${i}"
-											}
-									}
+										}
 								}
 							}
 
@@ -228,7 +198,7 @@ include \$(BUILD_PREBUILT)
 							script {
 								if (localModules.size() > 0) {
 									writeFile(file: 'Android.mk', text: """LOCAL_PATH := \$(call my-dir)
-${localModules.join()}
+${localModules.values().join()}
 """)
 								}
 							}
@@ -236,8 +206,8 @@ ${localModules.join()}
 							// write product makefile
 							script {
 								addProductPackages = ''
-								if (productPackages.size() > 0) {
-									addProductPackages = productPackages.collect { "PRODUCT_PACKAGES += ${it}" }.join("\n")
+								if (localModules.size() > 0) {
+									addProductPackages = localModules.collect { "PRODUCT_PACKAGES += ${it.key}" }.join("\n")
 								}
 							}
 
