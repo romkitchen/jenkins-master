@@ -118,13 +118,14 @@ pipeline {
 											.eachWithIndex { itDataApp, i ->
 												localModules << """
 include \$(CLEAR_VARS)
-LOCAL_MODULE := data_app_${i}
-LOCAL_MODULE_TAGS := optional
-LOCAL_SRC_FILES := apps/data/${itDataApp}
 LOCAL_CERTIFICATE := PRESIGNED
+LOCAL_MODULE := data_app_${i}
 LOCAL_MODULE_CLASS := APPS
-LOCAL_PRIVILEGED_MODULE := false
 LOCAL_MODULE_SUFFIX := \$(COMMON_ANDROID_PACKAGE_SUFFIX)
+LOCAL_MODULE_TAGS := optional
+LOCAL_PRIVILEGED_MODULE := false
+LOCAL_SRC_FILES := apps/data/${itDataApp}
+LOCAL_UNINSTALLABLE_MODULE := true
 include \$(BUILD_PREBUILT)
 """
 
@@ -142,13 +143,14 @@ include \$(BUILD_PREBUILT)
 											.eachWithIndex { itSystemApp, i ->
 												localModules << """
 include \$(CLEAR_VARS)
-LOCAL_MODULE := system_app_${i}
-LOCAL_MODULE_TAGS := optional
-LOCAL_SRC_FILES := apps/system/${itSystemApp}
 LOCAL_CERTIFICATE := PRESIGNED
+LOCAL_MODULE := system_app_${i}
 LOCAL_MODULE_CLASS := APPS
-LOCAL_PRIVILEGED_MODULE := true
 LOCAL_MODULE_SUFFIX := \$(COMMON_ANDROID_PACKAGE_SUFFIX)
+LOCAL_MODULE_TAGS := optional
+LOCAL_PRIVILEGED_MODULE := false
+LOCAL_SRC_FILES := apps/system/${itSystemApp}
+LOCAL_UNINSTALLABLE_MODULE := false
 include \$(BUILD_PREBUILT)
 """
 
