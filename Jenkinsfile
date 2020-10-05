@@ -113,6 +113,7 @@ pipeline {
 									sh(script: "/bin/bash -c 'find -maxdepth 1 -type f -name \"*.apk\" -printf \"%f\n\"'", returnStdout: true)
 										.trim()
 										.split("\n")
+										.findAll { !it.empty }
 										.each {
 											def applicationLabel = sh(script: "/bin/bash -c 'aapt dump badging \"${it}\" | pcregrep -o1 \$\"application-label:\\x27(.+)\\x27\" | tr -d \'[:space:]\''", returnStdout: true).trim()
 											localModules[applicationLabel] = """
